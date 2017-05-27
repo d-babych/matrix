@@ -7,6 +7,8 @@
 //
 
 import Foundation
+import Accelerate
+
 
 precedencegroup PowerPrecedence {
     higherThan: MultiplicationPrecedence
@@ -15,9 +17,8 @@ precedencegroup PowerPrecedence {
 
 infix operator ^^: PowerPrecedence
 
-struct Matrix<T> : CustomStringConvertible {
-    
-    typealias T = Decimal
+
+struct Matrix<T : BinaryFloatingPoint> : CustomStringConvertible {
     
     var rows : Int
     var cols : Int
@@ -94,24 +95,25 @@ struct Matrix<T> : CustomStringConvertible {
         var result = Matrix(rows: lhs.rows, cols: rhs.cols)
         for row in 0 ..< lhs.rows {
             for col in 0 ..< rhs.cols {
-                result[row, col] = 0
+                var sum : T = 0
                 for i in 0 ..< lhs.cols {
-                    result[row, col] += lhs[row, i] * rhs[i, col]
+                    sum += lhs[row, i] * rhs[i, col]
                 }
+                result[row, col] = sum
             }
         }
         return result
     }
     
     
-    static func *(lhs: Decimal, rhs: Matrix) -> Matrix {
+    static func *(lhs: T, rhs: Matrix) -> Matrix {
         var result = rhs
         result.items = result.items.map { $0 * lhs }
         return result
     }
     
     
-    static func *(lhs: Matrix, rhs: Decimal) -> Matrix {
+    static func *(lhs: Matrix, rhs: T) -> Matrix {
         var result = lhs
         result.items = result.items.map { $0 * rhs }
         return result
@@ -128,5 +130,31 @@ struct Matrix<T> : CustomStringConvertible {
         return result
     }
     
+    
+}
+
+
+extension Matrix where T == Float {
+    // optimized emplementation for type Float
+    
+    static func *(lhs: Matrix, rhs: Matrix) -> Matrix {
+        assert(lhs.cols == rhs.rows, "Matrices of incompatible size")
+        var result = Matrix(rows: lhs.rows, cols: rhs.cols)
+        cblas_sgemm(CBLAS_ORDER.init(101), CBLAS_TRANSPOSE.init(111), CBLAS_TRANSPOSE.init(111), Int32(lhs.rows), Int32(rhs.cols), Int32(lhs.cols), 1.0, lhs.items, Int32(lhs.cols), rhs.items, Int32(rhs.cols), 0.0, &result.items, Int32(result.cols))
+        return result
+    }
+    
+}
+
+
+extension Matrix where T == Double {
+    // optimized emplementation for type Double
+    
+    static func *(lhs: Matrix, rhs: Matrix) -> Matrix {
+        assert(lhs.cols == rhs.rows, "Matrices of incompatible size")
+        var result = Matrix(rows: lhs.rows, cols: rhs.cols)
+        cblas_dgemm(CBLAS_ORDER.init(101), CBLAS_TRANSPOSE.init(111), CBLAS_TRANSPOSE.init(111), Int32(lhs.rows), Int32(rhs.cols), Int32(lhs.cols), 1.0, lhs.items, Int32(lhs.cols), rhs.items, Int32(rhs.cols), 0.0, &result.items, Int32(result.cols))
+        return result
+    }
     
 }
